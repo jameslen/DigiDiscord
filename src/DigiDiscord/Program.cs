@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
@@ -29,7 +30,7 @@ namespace DigiDiscord
 
     public class Program
     {
-        internal static readonly string Token = "";
+        internal static string Token = "";
 
         public static void Main(string[] args)
         {
@@ -39,6 +40,7 @@ namespace DigiDiscord
 
         public static async Task AsyncMain(string[] args)
         {
+            Token = File.ReadAllText("Token.txt");
             var client = new HttpClient();
 
             client.BaseAddress = new Uri(DiscordAPI.ApiBase);
