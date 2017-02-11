@@ -100,6 +100,8 @@ namespace DigiDiscord.Gateway
             await m_gatewaySocket.ConnectAsync(new Uri(gateway + "?v=5&encoding=json"), m_cancellationToken);
             Program.Log(LogLevel.Verbose, $"Connected");
 
+            string parsedData = "";
+
             while (m_gatewaySocket.State == WebSocketState.Open)
             {
                 try 
@@ -110,15 +112,10 @@ namespace DigiDiscord.Gateway
 
                     if (recv.MessageType == WebSocketMessageType.Text)
                     {
-                        string data = System.Text.Encoding.UTF8.GetString(buffer.Array, 0, recv.Count);
+                        string payload = System.Text.Encoding.UTF8.GetString(buffer.Array, 0, recv.Count);
+                        parsedData += payload;
 
-                        Program.Log(LogLevel.Verbose, $"Websocket Data Recieved: {data}");
-
-                        var payload = new GatewayOp(data);
-
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                        ProcessMessage(payload);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                        Program.Log(LogLevel.Verbose, $"Websocket Data Recieved: {parsedData}");
                     }
                     else if (recv.MessageType == WebSocketMessageType.Binary)
                     {
@@ -140,7 +137,17 @@ namespace DigiDiscord.Gateway
                         //await websocket.ConnectAsync(new Uri(url + "?v=5&encoding=json"), cancellation);
                         //heartbeat = new System.Threading.CancellationTokenSource();
                     }
+                    
+                    if(recv.EndOfMessage)
+                    {
+                        var payload = new GatewayOp(parsedData);
 
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                        ProcessMessage(payload);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+
+                        parsedData = "";
+                    }
 
                 }
                 catch (Exception ex)
