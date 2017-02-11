@@ -13,9 +13,12 @@ namespace DigiDiscord.Gateway
     {
         private ClientWebSocket m_gatewaySocket = new ClientWebSocket();
         private CancellationToken m_cancellationToken = new CancellationToken();
+        private int m_heartbeatInterval = 0;
         private string m_token = null;
         private bool m_alive = true;
         private int? m_lastRecievedSeq = null;
+
+        //public delegate void GatewayOpReceived(Gateway)
 
         public GatewayManager(string gateway, string token)
         {
@@ -93,23 +96,29 @@ namespace DigiDiscord.Gateway
             var bufferData = new byte[1024 * 16];
             var buffer = new ArraySegment<byte>(bufferData);
 
+            Program.Log(LogLevel.Verbose, $"Connecting to gateway \"{gateway}\"");
             await m_gatewaySocket.ConnectAsync(new Uri(gateway + "?v=5&encoding=json"), m_cancellationToken);
+            Program.Log(LogLevel.Verbose, $"Connected");
 
-            while(m_gatewaySocket.State == WebSocketState.Open)
+            while (m_gatewaySocket.State == WebSocketState.Open)
             {
                 try 
                 {
+                    Program.Log(LogLevel.Verbose, $"Waiting to receive data...");
                     var recv = await m_gatewaySocket.ReceiveAsync(buffer, m_cancellationToken);
+                    Program.Log(LogLevel.Verbose, $"Data received.");
 
                     if (recv.MessageType == WebSocketMessageType.Text)
                     {
                         string data = System.Text.Encoding.UTF8.GetString(buffer.Array, 0, recv.Count);
 
-                        var payload = new GatewayOp(data);
-
                         Program.Log(LogLevel.Verbose, $"Websocket Data Recieved: {data}");
 
+                        var payload = new GatewayOp(data);
+
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                         ProcessMessage(payload);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                     }
                     else if (recv.MessageType == WebSocketMessageType.Binary)
                     {
@@ -142,6 +151,8 @@ namespace DigiDiscord.Gateway
                     break;
                 }
             }
+
+            Program.Log(LogLevel.Verbose, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
         }
 
         private async Task ProcessMessage(GatewayOp op)
@@ -150,10 +161,15 @@ namespace DigiDiscord.Gateway
             {
                 m_lastRecievedSeq = op.Sequence;
             }
-            
+
+            Program.Log(LogLevel.Verbose, $"GatewayOp: {op.Op}");
             switch (op.Op)
             {
                 case GatewayOpCode.Dispatch: // Dispatch
+                    if (op.EventName == "MESSAGE_CREATE")
+                    {
+                        //EchoMessage()
+                    }
                     break;
                 case GatewayOpCode.Heartbeat: // Heartbeat
                     break;
@@ -168,19 +184,10 @@ namespace DigiDiscord.Gateway
                 case GatewayOpCode.Hello: // Hello
                     {
                         var response = CreateIdentity(m_token, 0, 1);
-                        var bytes = System.Text.Encoding.UTF8.GetBytes(response);
-                        await m_gatewaySocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, m_cancellationToken);
-                        int heartbeatInterval = JObject.Parse(op.Data)["heartbeat_interval"].ToObject<int>();
+                        await SendData(response);
+                        m_heartbeatInterval = JObject.Parse(op.Data)["heartbeat_interval"].ToObject<int>();
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                        Task.Run(async () =>
-                        {
-                            while (m_cancellationToken.IsCancellationRequested == false)
-                            {
-                                await m_gatewaySocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes($"{{\"op\":11, \"d\":{m_lastRecievedSeq}}}")), WebSocketMessageType.Text, true, m_cancellationToken);
-                                Thread.Sleep(heartbeatInterval);
-                            }
-                        
-                        });
+                        SendData($"{{\"op\":1, \"d\":null}}");
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                     }
                     //else
@@ -191,8 +198,21 @@ namespace DigiDiscord.Gateway
                     break;
                 case GatewayOpCode.HeartbeatACK: // Heartbeat ACK
                     Program.Log(LogLevel.Verbose, "Heartbeat ACK");
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    Task.Run(() =>
+                    {
+                        Thread.Sleep(m_heartbeatInterval);
+                        SendData($"{{\"op\":1, \"d\":{m_lastRecievedSeq}}}");
+                    });
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                     break;
             }
+        }
+
+        private async Task SendData(string payload)
+        {
+            Program.Log(LogLevel.Verbose, $"Sending payload: {payload}");
+            await m_gatewaySocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(payload)), WebSocketMessageType.Text, true, m_cancellationToken);
         }
 
     }
