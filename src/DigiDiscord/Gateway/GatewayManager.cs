@@ -15,6 +15,7 @@ namespace DigiDiscord.Gateway
         private CancellationToken m_cancellationToken = new CancellationToken();
         private string m_token = null;
         private bool m_alive = true;
+        private int? m_lastRecievedSeq = null;
 
         public GatewayManager(string gateway, string token)
         {
@@ -48,7 +49,7 @@ namespace DigiDiscord.Gateway
 
         private class GatewayOp
         {
-            public static string GatewayPayloadBase = "{{ 'op': {0}, 'd': {1}, 's': {2}, 't': {3} }}";
+            public static string GatewayPayloadBase = "{{ \"op\": {0}, \"d\": {1}, \"s\": {2}, \"t\": {3} }}";
 
             public GatewayOp(string payload)
             {
@@ -82,7 +83,7 @@ namespace DigiDiscord.Gateway
 
         private static string CreateIdentity(string token, int currentShard, int totalShards)
         {
-            var identity = $"{{ 'token': {token}, 'properties': {{'$os': 'windows','$browser': 'digibot','$device': 'digibot','$referrer': '','$referring_domain': ''}},'compress': true,'large_threshold': 250, 'shard': [{currentShard}, {totalShards}] }}";
+            var identity = $"{{ \"token\": \"{token}\", \"properties\": {{\"$os\": \"windows\",\"$browser\": \"digibot\",\"$device\": \"digibot\",\"$referrer\": \"\",\"$referring_domain\": \"\"}},\"compress\": false,\"large_threshold\": 250, \"shard\": [{currentShard}, {totalShards}] }}";
             return string.Format(GatewayOp.GatewayPayloadBase, (int)GatewayOpCode.Identify, identity, "null", "null");
         }
 
@@ -108,51 +109,20 @@ namespace DigiDiscord.Gateway
 
                         Program.Log(LogLevel.Verbose, $"Websocket Data Recieved: {data}");
 
-                        switch (payload.Op)
-                        {
-                            case GatewayOpCode.Dispatch: // Dispatch
-                                break;
-                            case GatewayOpCode.Heartbeat: // Heartbeat
-                                break;
-                            case GatewayOpCode.StatusUpdate: // Status Update
-                                break;
-                            case GatewayOpCode.Resume: // Resume
-                                break;
-                            case GatewayOpCode.Reconnect: // Reconnect
-                                break;
-                            case GatewayOpCode.InvalidSession: // Invalid Session
-                                break;
-                            case GatewayOpCode.Hello: // Hello
-                                //if (!connected)
-                                {
-                                    await m_gatewaySocket.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes(CreateIdentity(m_token,0,1))), WebSocketMessageType.Text, true, m_cancellationToken);
-                                    //int heartbeatInterval = (jsonData["d"] as JObject)["heartbeat_interval"].ToObject<int>();
-                                    //Task.Run(async () =>
-                                    //{
-                                    //    while (heartbeatToken.IsCancellationRequested == false)
-                                    //    {
-                                    //        await websocket.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes("{\"op\":11}")), WebSocketMessageType.Text, true, heartbeatToken);
-                                    //        Thread.Sleep(heartbeatInterval);
-                                    //    }
-                                    //
-                                    //});
-                                    //connected = true;
-                                }
-                                //else
-                                {
-
-                                }
-
-                                break;
-                            case GatewayOpCode.HeartbeatACK: // Heartbeat ACK
-                                Program.Log(LogLevel.Verbose, "Heartbeat ACK");
-                                break;
-                        }
+                        ProcessMessage(payload);
                     }
                     else if (recv.MessageType == WebSocketMessageType.Binary)
                     {
                         // TODO: Handle the binary data
                         Program.Log(LogLevel.Verbose, "Websocket Binary Data Received");
+                        Program.Log(LogLevel.Verbose, $"Recieved {recv.Count} bytes");
+
+                        if (recv.EndOfMessage)
+                        {
+                            Program.Log(LogLevel.Verbose, "End of message");
+                        }
+
+
                     }
                     else if (recv.MessageType == WebSocketMessageType.Close)
                     {
@@ -171,6 +141,57 @@ namespace DigiDiscord.Gateway
 
                     break;
                 }
+            }
+        }
+
+        private async Task ProcessMessage(GatewayOp op)
+        {
+            if (op.Sequence != null)
+            {
+                m_lastRecievedSeq = op.Sequence;
+            }
+            
+            switch (op.Op)
+            {
+                case GatewayOpCode.Dispatch: // Dispatch
+                    break;
+                case GatewayOpCode.Heartbeat: // Heartbeat
+                    break;
+                case GatewayOpCode.StatusUpdate: // Status Update
+                    break;
+                case GatewayOpCode.Resume: // Resume
+                    break;
+                case GatewayOpCode.Reconnect: // Reconnect
+                    break;
+                case GatewayOpCode.InvalidSession: // Invalid Session
+                    break;
+                case GatewayOpCode.Hello: // Hello
+                    {
+                        var response = CreateIdentity(m_token, 0, 1);
+                        var bytes = System.Text.Encoding.UTF8.GetBytes(response);
+                        await m_gatewaySocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, m_cancellationToken);
+                        int heartbeatInterval = JObject.Parse(op.Data)["heartbeat_interval"].ToObject<int>();
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                        Task.Run(async () =>
+                        {
+                            while (m_cancellationToken.IsCancellationRequested == false)
+                            {
+                                await m_gatewaySocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes($"{{\"op\":11, \"d\":{m_lastRecievedSeq}}}")), WebSocketMessageType.Text, true, m_cancellationToken);
+                                Thread.Sleep(heartbeatInterval);
+                            }
+                        
+                        });
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    }
+                    //else
+                    {
+
+                    }
+
+                    break;
+                case GatewayOpCode.HeartbeatACK: // Heartbeat ACK
+                    Program.Log(LogLevel.Verbose, "Heartbeat ACK");
+                    break;
             }
         }
 
