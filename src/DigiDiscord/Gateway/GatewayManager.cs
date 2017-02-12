@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+// TODO: Turn data compression on
 // TODO: Voice Chat Integration
 // TODO: Request Guild Members
 // TODO: Set Status
@@ -24,7 +25,7 @@ namespace DigiDiscord.Gateway
         private string m_gateway;
         private bool m_alive = true;
         private int? m_lastRecievedSeq = null;
-        private int m_sessionId = -1;
+        private string m_sessionId = "";
 
         public delegate void EventDispatchedHandler(string eventName, string payload);
 
@@ -120,33 +121,33 @@ namespace DigiDiscord.Gateway
             {
                 try 
                 {
-                    Program.Log(LogLevel.Verbose, $"Waiting to receive data...");
+                    Program.Log(LogLevel.Debug, $"Waiting to receive data...");
                     var recv = await m_gatewaySocket.ReceiveAsync(buffer, m_cancellationToken);
-                    Program.Log(LogLevel.Verbose, $"Data received.");
+                    Program.Log(LogLevel.Debug, $"Data received.");
 
                     if (recv.MessageType == WebSocketMessageType.Text)
                     {
                         string payload = System.Text.Encoding.UTF8.GetString(buffer.Array, 0, recv.Count);
                         parsedData += payload;
 
-                        Program.Log(LogLevel.Verbose, $"Websocket Data Recieved: {parsedData}");
+                        Program.Log(LogLevel.Debug, $"Websocket Data Recieved: {parsedData}");
                     }
                     else if (recv.MessageType == WebSocketMessageType.Binary)
                     {
                         // TODO: Handle the binary data
-                        Program.Log(LogLevel.Verbose, "Websocket Binary Data Received");
-                        Program.Log(LogLevel.Verbose, $"Recieved {recv.Count} bytes");
+                        Program.Log(LogLevel.Debug, "Websocket Binary Data Received");
+                        Program.Log(LogLevel.Debug, $"Recieved {recv.Count} bytes");
 
                         if (recv.EndOfMessage)
                         {
-                            Program.Log(LogLevel.Verbose, "End of message");
+                            Program.Log(LogLevel.Debug, "End of message");
                         }
 
 
                     }
                     else if (recv.MessageType == WebSocketMessageType.Close)
                     {
-                        Program.Log(LogLevel.Verbose, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
+                        Program.Log(LogLevel.Info, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
                         if (!AttemptConnection(m_gateway))
                         {
                             break;
@@ -163,7 +164,7 @@ namespace DigiDiscord.Gateway
                 }
                 catch (Exception ex)
                 {
-
+                    parsedData = "";
                     Program.Log(LogLevel.Error, $"Exception: {ex.Message}");
 
                     if (!AttemptConnection(m_gateway))
@@ -173,7 +174,7 @@ namespace DigiDiscord.Gateway
                 }
             }
 
-            Program.Log(LogLevel.Verbose, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
+            Program.Log(LogLevel.Info, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
         }
 
         private bool AttemptConnection(string gateway)
@@ -184,16 +185,16 @@ namespace DigiDiscord.Gateway
 
             for(int i = 0; i < 3; ++i)
             {
-                Program.Log(LogLevel.Verbose, $"Connecting to gateway \"{gateway}\"");
+                Program.Log(LogLevel.Debug, $"Connecting to gateway \"{gateway}\"");
                 m_gatewaySocket.ConnectAsync(new Uri(gateway + "?v=5&encoding=json"), m_cancellationToken).Wait();
 
                 if (m_gatewaySocket.State == WebSocketState.Open)
                 {
-                    Program.Log(LogLevel.Verbose, $"Connected");
+                    Program.Log(LogLevel.Debug, $"Connected");
                     return true;
                 }
 
-                Program.Log(LogLevel.Verbose, $"Connection attempt failed.  Trying again...");
+                Program.Log(LogLevel.Warning, $"Connection attempt failed.  Trying again...");
             }
 
             Program.Log(LogLevel.Error, $"Connection attempted exceeded retry limit.");
@@ -207,13 +208,13 @@ namespace DigiDiscord.Gateway
                 m_lastRecievedSeq = op.Sequence;
             }
 
-            Program.Log(LogLevel.Verbose, $"GatewayOp: {op.Op}");
+            Program.Log(LogLevel.Debug, $"GatewayOp: {op.Op}");
             switch (op.Op)
             {
-                case GatewayOpCode.Dispatch: // Dispatch
+                case GatewayOpCode.Dispatch:
                     if(op.EventName == "READY")
                     {
-                        m_sessionId = JObject.Parse(op.Data)["session_id"].ToObject<int>();
+                        m_sessionId = JObject.Parse(op.Data)["session_id"].ToString();
                     }
 
                     DispatchEvent(op.EventName, op.Data);
@@ -224,7 +225,7 @@ namespace DigiDiscord.Gateway
                 case GatewayOpCode.Hello:
                     m_heartbeatInterval = JObject.Parse(op.Data)["heartbeat_interval"].ToObject<int>();
 
-                    if(m_sessionId == -1)
+                    if(string.IsNullOrEmpty(m_sessionId))
                     {
                         SendIdentity();
                     }
@@ -256,7 +257,7 @@ namespace DigiDiscord.Gateway
 
         private void SendData(string payload)
         {
-            Program.Log(LogLevel.Verbose, $"Sending payload: {payload}");
+            Program.Log(LogLevel.Debug, $"Sending payload: {payload}");
             m_gatewaySocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(payload)), WebSocketMessageType.Text, true, m_cancellationToken);
         }
 
