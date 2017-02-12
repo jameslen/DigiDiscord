@@ -5,18 +5,21 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 
 namespace DigiDiscord
 {
-    internal class DiscordAPI
+    public class DiscordAPI
     {
         public static readonly string ApiBase = "https://discordapp.com/";
         public static readonly string Gateway = "api/gateway";
         public static readonly string BotGateway = "api/gateway/bot";
         public static readonly string GetInvite = "api/invites";
+
+        public static readonly string PostMessage = "api/channels/{0}/messages";
     }
     
     public enum LogLevel
@@ -38,10 +41,12 @@ namespace DigiDiscord
             Console.ReadLine();
         }
 
+        public static HttpClient client;
+
         public static async Task AsyncMain(string[] args)
         {
             Token = File.ReadAllText("Token.txt");
-            var client = new HttpClient();
+            client = new HttpClient();
 
             client.BaseAddress = new Uri(DiscordAPI.ApiBase);
             client.DefaultRequestHeaders.Add("Authorization", $"Bot {Token}");
@@ -67,6 +72,16 @@ namespace DigiDiscord
                     //var invite = await client.PostAsync(DiscordAPI.GetInvite + "/PSSMW",new StringContent(""));
 
                     //var inviteData = await invite.Content.ReadAsStringAsync();
+
+                    //268753273803112449
+
+                    var newMessage = new JObject();
+
+                    //newMessage["nonce"] = messageData["nonce"];
+                    //newMessage["tts"] = false;
+                    //newMessage["content"] = "All your data are belong to me";
+                    //
+                    //await Program.client.PostAsync(string.Format(DiscordAPI.PostMessage, 268753273803112449), new StringContent(newMessage.ToString(), Encoding.UTF8, "application/json"));
 
                     while (true)
                     {

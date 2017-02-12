@@ -1,12 +1,18 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+// TODO: Voice Chat Integration
+// TODO: Request Guild Members
+// TODO: Set Status
+// TODO: Code Cleanup
 namespace DigiDiscord.Gateway
 {
     public class GatewayManager
@@ -15,20 +21,28 @@ namespace DigiDiscord.Gateway
         private CancellationToken m_cancellationToken = new CancellationToken();
         private int m_heartbeatInterval = 0;
         private string m_token = null;
+        private string m_gateway;
         private bool m_alive = true;
         private int? m_lastRecievedSeq = null;
+        private int m_sessionId = -1;
 
-        //public delegate void GatewayOpReceived(Gateway)
+        public delegate void EventDispatchedHandler(string eventName, string payload);
+
+        public event EventDispatchedHandler EventDispatched;
+
+        protected void DispatchEvent(string eventName, string payload)
+        {
+            EventDispatched?.Invoke(eventName, payload);
+        }
 
         public GatewayManager(string gateway, string token)
         {
             m_token = token;
-            m_gatewaySocket.Options.SetRequestHeader("Authorization", $"Bot {token}");
-            m_gatewaySocket.Options.SetRequestHeader("User-Agent", "DigiBot/0.0.0.0");
+            m_gateway = gateway;
 
             Task.Run(async () => 
             {
-                await SocketLoopHandler(gateway); 
+                await SocketLoopHandler(); 
                 
                 while (m_alive) { } 
             });
@@ -81,7 +95,7 @@ namespace DigiDiscord.Gateway
 
         private static string CreateHeartbeat(int? sequence)
         {
-            return string.Format(GatewayOp.GatewayPayloadBase, GatewayOpCode.Heartbeat, sequence == null ? "null" : sequence.Value.ToString(), "null", "null");
+            return string.Format(GatewayOp.GatewayPayloadBase, 1, sequence == null ? "null" : sequence.Value.ToString(), "null", "null");
         }
 
         private static string CreateIdentity(string token, int currentShard, int totalShards)
@@ -90,15 +104,15 @@ namespace DigiDiscord.Gateway
             return string.Format(GatewayOp.GatewayPayloadBase, (int)GatewayOpCode.Identify, identity, "null", "null");
         }
 
-
-        private async Task SocketLoopHandler(string gateway)
+        private async Task SocketLoopHandler()
         {
             var bufferData = new byte[1024 * 16];
             var buffer = new ArraySegment<byte>(bufferData);
 
-            Program.Log(LogLevel.Verbose, $"Connecting to gateway \"{gateway}\"");
-            await m_gatewaySocket.ConnectAsync(new Uri(gateway + "?v=5&encoding=json"), m_cancellationToken);
-            Program.Log(LogLevel.Verbose, $"Connected");
+            if(AttemptConnection(m_gateway) == false)
+            {
+                return;
+            }
 
             string parsedData = "";
 
@@ -132,20 +146,17 @@ namespace DigiDiscord.Gateway
                     }
                     else if (recv.MessageType == WebSocketMessageType.Close)
                     {
-                        //heartbeat.Cancel();
-                        //await websocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", cancellation);
-                        //await websocket.ConnectAsync(new Uri(url + "?v=5&encoding=json"), cancellation);
-                        //heartbeat = new System.Threading.CancellationTokenSource();
+                        Program.Log(LogLevel.Verbose, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
+                        if (!AttemptConnection(m_gateway))
+                        {
+                            break;
+                        }
                     }
                     
                     if(recv.EndOfMessage)
                     {
                         var payload = new GatewayOp(parsedData);
-
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                         ProcessMessage(payload);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-
                         parsedData = "";
                     }
 
@@ -153,16 +164,43 @@ namespace DigiDiscord.Gateway
                 catch (Exception ex)
                 {
 
-                    Program.Log(LogLevel.Error, $"Failed to receive data: {ex.Message}");
+                    Program.Log(LogLevel.Error, $"Exception: {ex.Message}");
 
-                    break;
+                    if (!AttemptConnection(m_gateway))
+                    {
+                        break;
+                    }
                 }
             }
 
             Program.Log(LogLevel.Verbose, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
         }
 
-        private async Task ProcessMessage(GatewayOp op)
+        private bool AttemptConnection(string gateway)
+        {
+            m_gatewaySocket = new ClientWebSocket();
+            m_gatewaySocket.Options.SetRequestHeader("Authorization", $"Bot {m_token}");
+            m_gatewaySocket.Options.SetRequestHeader("User-Agent", "DigiBot/0.0.0.0");
+
+            for(int i = 0; i < 3; ++i)
+            {
+                Program.Log(LogLevel.Verbose, $"Connecting to gateway \"{gateway}\"");
+                m_gatewaySocket.ConnectAsync(new Uri(gateway + "?v=5&encoding=json"), m_cancellationToken).Wait();
+
+                if (m_gatewaySocket.State == WebSocketState.Open)
+                {
+                    Program.Log(LogLevel.Verbose, $"Connected");
+                    return true;
+                }
+
+                Program.Log(LogLevel.Verbose, $"Connection attempt failed.  Trying again...");
+            }
+
+            Program.Log(LogLevel.Error, $"Connection attempted exceeded retry limit.");
+            return false;
+        }
+
+        private void ProcessMessage(GatewayOp op)
         {
             if (op.Sequence != null)
             {
@@ -173,53 +211,62 @@ namespace DigiDiscord.Gateway
             switch (op.Op)
             {
                 case GatewayOpCode.Dispatch: // Dispatch
-                    if (op.EventName == "MESSAGE_CREATE")
+                    if(op.EventName == "READY")
                     {
-                        //EchoMessage()
-                    }
-                    break;
-                case GatewayOpCode.Heartbeat: // Heartbeat
-                    break;
-                case GatewayOpCode.StatusUpdate: // Status Update
-                    break;
-                case GatewayOpCode.Resume: // Resume
-                    break;
-                case GatewayOpCode.Reconnect: // Reconnect
-                    break;
-                case GatewayOpCode.InvalidSession: // Invalid Session
-                    break;
-                case GatewayOpCode.Hello: // Hello
-                    {
-                        var response = CreateIdentity(m_token, 0, 1);
-                        await SendData(response);
-                        m_heartbeatInterval = JObject.Parse(op.Data)["heartbeat_interval"].ToObject<int>();
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                        SendData($"{{\"op\":1, \"d\":null}}");
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                    }
-                    //else
-                    {
-
+                        m_sessionId = JObject.Parse(op.Data)["session_id"].ToObject<int>();
                     }
 
+                    DispatchEvent(op.EventName, op.Data);
                     break;
-                case GatewayOpCode.HeartbeatACK: // Heartbeat ACK
-                    Program.Log(LogLevel.Verbose, "Heartbeat ACK");
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                    Task.Run(() =>
+                case GatewayOpCode.Reconnect:
+                    AttemptConnection(m_gateway);
+                    break;       
+                case GatewayOpCode.Hello:
+                    m_heartbeatInterval = JObject.Parse(op.Data)["heartbeat_interval"].ToObject<int>();
+
+                    if(m_sessionId == -1)
                     {
-                        Thread.Sleep(m_heartbeatInterval);
-                        SendData($"{{\"op\":1, \"d\":{m_lastRecievedSeq}}}");
-                    });
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                        SendIdentity();
+                    }
+                    else
+                    {
+                        var payload = new JObject();
+                        payload["token"] = m_token;
+                        payload["session_id"] = m_sessionId;
+                        payload["seq"] = m_lastRecievedSeq;
+
+                        SendData(payload.ToString());
+                    }
+                    break;
+                case GatewayOpCode.InvalidSession:
+                    SendIdentity();
+                    break;
+                case GatewayOpCode.HeartbeatACK:
+                    SendHeartbreat();
                     break;
             }
         }
 
-        private async Task SendData(string payload)
+        private void SendIdentity()
+        {
+            var response = CreateIdentity(m_token, 0, 1);
+            SendData(response);
+            SendHeartbreat();
+        }
+
+        private void SendData(string payload)
         {
             Program.Log(LogLevel.Verbose, $"Sending payload: {payload}");
-            await m_gatewaySocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(payload)), WebSocketMessageType.Text, true, m_cancellationToken);
+            m_gatewaySocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(payload)), WebSocketMessageType.Text, true, m_cancellationToken);
+        }
+
+        private void SendHeartbreat()
+        {
+            Task.Run(() =>
+            {
+                Thread.Sleep(m_heartbeatInterval);
+                SendData(CreateHeartbeat(m_lastRecievedSeq));
+            });
         }
 
     }
