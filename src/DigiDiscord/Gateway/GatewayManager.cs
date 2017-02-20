@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using DigiDiscord.Utilities;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -9,46 +10,27 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+// Source Docs: https://github.com/hammerandchisel/discord-api-docs/blob/master/docs/topics/Gateway.md
+//              
+
 // TODO: Turn data compression on
 // TODO: Voice Chat Integration
 // TODO: Request Guild Members
 // TODO: Set Status
 // TODO: Code Cleanup
-namespace DigiDiscord.Gateway
+namespace DigiDiscord
 {
+    namespace DiscordAPI
+    {
+        public static class Gateway
+        {
+            public static readonly string Default = "api/gateway";
+            public static readonly string Bot = "api/gateway/bot";
+        }
+    }
+
     public class GatewayManager
     {
-        private ClientWebSocket m_gatewaySocket = new ClientWebSocket();
-        private CancellationToken m_cancellationToken = new CancellationToken();
-        private int m_heartbeatInterval = 0;
-        private string m_token = null;
-        private string m_gateway;
-        private bool m_alive = true;
-        private int? m_lastRecievedSeq = null;
-        private string m_sessionId = "";
-
-        public delegate void EventDispatchedHandler(string eventName, string payload);
-
-        public event EventDispatchedHandler EventDispatched;
-
-        protected void DispatchEvent(string eventName, string payload)
-        {
-            EventDispatched?.Invoke(eventName, payload);
-        }
-
-        public GatewayManager(string gateway, string token)
-        {
-            m_token = token;
-            m_gateway = gateway;
-
-            Task.Run(async () => 
-            {
-                await SocketLoopHandler(); 
-                
-                while (m_alive) { } 
-            });
-        }
-
         private enum GatewayOpCode : int
         {
             Dispatch = 0,
@@ -77,7 +59,7 @@ namespace DigiDiscord.Gateway
                 Data = json["d"].ToString();
 
                 JToken value = null;
-                if(json.TryGetValue("s", out value) && value.Type != JTokenType.Null)
+                if (json.TryGetValue("s", out value) && value.Type != JTokenType.Null)
                 {
                     Sequence = value.ToObject<int>();
                 }
@@ -94,15 +76,40 @@ namespace DigiDiscord.Gateway
             public string EventName { get; set; } = null;
         }
 
-        private static string CreateHeartbeat(int? sequence)
+        private ClientWebSocket m_gatewaySocket = new ClientWebSocket();
+        private CancellationToken m_cancellationToken = new CancellationToken();
+        private int m_heartbeatInterval = 0;
+        private string m_token = null;
+        private string m_gateway;
+        private bool m_alive = true;
+        private int? m_lastRecievedSeq = null;
+        private string m_sessionId = "";
+        private ILogger _Logger = null;
+
+        public delegate void EventDispatchedHandler(string eventName, string payload);
+        public event EventDispatchedHandler EventDispatched;
+
+        public GatewayManager(string gateway, string token, ILogger logger = null)
         {
-            return string.Format(GatewayOp.GatewayPayloadBase, 1, sequence == null ? "null" : sequence.Value.ToString(), "null", "null");
+            m_token = token;
+            m_gateway = gateway;
+
+            _Logger = logger;
         }
 
-        private static string CreateIdentity(string token, int currentShard, int totalShards)
+        public void Initialize()
         {
-            var identity = $"{{ \"token\": \"{token}\", \"properties\": {{\"$os\": \"windows\",\"$browser\": \"digibot\",\"$device\": \"digibot\",\"$referrer\": \"\",\"$referring_domain\": \"\"}},\"compress\": false,\"large_threshold\": 250, \"shard\": [{currentShard}, {totalShards}] }}";
-            return string.Format(GatewayOp.GatewayPayloadBase, (int)GatewayOpCode.Identify, identity, "null", "null");
+            Task.Run(async () =>
+            {
+                await SocketLoopHandler();
+
+                while (m_alive) { }
+            });
+        }
+
+        protected void DispatchEvent(string eventName, string payload)
+        {
+            EventDispatched?.Invoke(eventName, payload);
         }
 
         private async Task SocketLoopHandler()
@@ -121,33 +128,33 @@ namespace DigiDiscord.Gateway
             {
                 try 
                 {
-                    Program.Log(LogLevel.Debug, $"Waiting to receive data...");
+                    _Logger?.Debug($"Waiting to receive data...");
                     var recv = await m_gatewaySocket.ReceiveAsync(buffer, m_cancellationToken);
-                    Program.Log(LogLevel.Debug, $"Data received.");
+                    _Logger?.Debug($"Data received.");
 
                     if (recv.MessageType == WebSocketMessageType.Text)
                     {
                         string payload = System.Text.Encoding.UTF8.GetString(buffer.Array, 0, recv.Count);
                         parsedData += payload;
 
-                        Program.Log(LogLevel.Debug, $"Websocket Data Recieved: {parsedData}");
+                        _Logger?.Debug($"Websocket Data Recieved: {parsedData}");
                     }
                     else if (recv.MessageType == WebSocketMessageType.Binary)
                     {
                         // TODO: Handle the binary data
-                        Program.Log(LogLevel.Debug, "Websocket Binary Data Received");
-                        Program.Log(LogLevel.Debug, $"Recieved {recv.Count} bytes");
+                        _Logger?.Debug("Websocket Binary Data Received");
+                        _Logger?.Debug($"Recieved {recv.Count} bytes");
 
                         if (recv.EndOfMessage)
                         {
-                            Program.Log(LogLevel.Debug, "End of message");
+                            _Logger?.Debug("End of message");
                         }
 
 
                     }
                     else if (recv.MessageType == WebSocketMessageType.Close)
                     {
-                        Program.Log(LogLevel.Info, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
+                        _Logger?.Info($"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
                         if (!AttemptConnection(m_gateway))
                         {
                             break;
@@ -165,7 +172,7 @@ namespace DigiDiscord.Gateway
                 catch (Exception ex)
                 {
                     parsedData = "";
-                    Program.Log(LogLevel.Error, $"Exception: {ex.Message}");
+                    _Logger?.Error($"Exception: {ex.Message}");
 
                     if (!AttemptConnection(m_gateway))
                     {
@@ -174,7 +181,7 @@ namespace DigiDiscord.Gateway
                 }
             }
 
-            Program.Log(LogLevel.Info, $"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
+            _Logger?.Info($"Connection closed. Reason: {m_gatewaySocket.CloseStatus} - {m_gatewaySocket.CloseStatusDescription}");
         }
 
         private bool AttemptConnection(string gateway)
@@ -185,19 +192,19 @@ namespace DigiDiscord.Gateway
 
             for(int i = 0; i < 3; ++i)
             {
-                Program.Log(LogLevel.Debug, $"Connecting to gateway \"{gateway}\"");
+                _Logger?.Debug($"Connecting to gateway \"{gateway}\"");
                 m_gatewaySocket.ConnectAsync(new Uri(gateway + "?v=5&encoding=json"), m_cancellationToken).Wait();
 
                 if (m_gatewaySocket.State == WebSocketState.Open)
                 {
-                    Program.Log(LogLevel.Debug, $"Connected");
+                    _Logger?.Debug($"Connected");
                     return true;
                 }
 
-                Program.Log(LogLevel.Warning, $"Connection attempt failed.  Trying again...");
+                _Logger?.Warning($"Connection attempt failed.  Trying again...");
             }
 
-            Program.Log(LogLevel.Error, $"Connection attempted exceeded retry limit.");
+            _Logger?.Error($"Connection attempted exceeded retry limit.");
             return false;
         }
 
@@ -208,7 +215,7 @@ namespace DigiDiscord.Gateway
                 m_lastRecievedSeq = op.Sequence;
             }
 
-            Program.Log(LogLevel.Debug, $"GatewayOp: {op.Op}");
+            _Logger?.Debug($"GatewayOp: {op.Op}");
             switch (op.Op)
             {
                 case GatewayOpCode.Dispatch:
@@ -257,7 +264,7 @@ namespace DigiDiscord.Gateway
 
         private void SendData(string payload)
         {
-            Program.Log(LogLevel.Debug, $"Sending payload: {payload}");
+            _Logger?.Debug($"Sending payload: {payload}");
             m_gatewaySocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(payload)), WebSocketMessageType.Text, true, m_cancellationToken);
         }
 
@@ -268,6 +275,17 @@ namespace DigiDiscord.Gateway
                 Thread.Sleep(m_heartbeatInterval);
                 SendData(CreateHeartbeat(m_lastRecievedSeq));
             });
+        }
+
+        private static string CreateHeartbeat(int? sequence)
+        {
+            return string.Format(GatewayOp.GatewayPayloadBase, 1, sequence == null ? "null" : sequence.Value.ToString(), "null", "null");
+        }
+
+        private static string CreateIdentity(string token, int currentShard, int totalShards)
+        {
+            var identity = $"{{ \"token\": \"{token}\", \"properties\": {{\"$os\": \"windows\",\"$browser\": \"digibot\",\"$device\": \"digidiscord\",\"$referrer\": \"\",\"$referring_domain\": \"\"}},\"compress\": false,\"large_threshold\": 250, \"shard\": [{currentShard}, {totalShards}] }}";
+            return string.Format(GatewayOp.GatewayPayloadBase, (int)GatewayOpCode.Identify, identity, "null", "null");
         }
 
     }
