@@ -22,100 +22,6 @@ namespace DigiDiscord
         }
     }
 
-    namespace Internal
-    {
-        public enum Events
-        {
-            READY,
-            CHANNEL_CREATE,
-            CHANNEL_UPDATE,
-            CHANNEL_DELETE,
-            GUILD_CREATE,
-            GUILD_UPDATE,
-            GUILD_DELETE,
-            GUILD_BAN_ADD,
-            GUILD_BAN_REMOVE,
-            GUILD_EMOJIS_UPDATE,
-            GUILD_INTEGRATIONS_UPDATE,
-            GUILD_MEMBER_ADD,
-            GUILD_MEMBER_REMOVE,
-            GUILD_MEMBER_UPDATE,
-            GUILD_MEMBERS_CHUNK,
-            GUILD_ROLE_CREATE,
-            GUILD_ROLE_DELETE,
-            MESSAGE_CREATE,
-            MESSAGE_UPDATE,
-            MESSAGE_DELETE,
-            MESSAGE_DELETE_BULK,
-            PRESENCE_UPDATE,
-            TYPING_START,
-            USER_SETTINGS_UPDATE,
-            VOICE_STATE_UPDATE,
-            VOICE_SERVER_UPDATE
-        }
-
-        public class Member
-        {
-            public DiscordUser User { get; set; }
-            public List<string> Roles { get; set; }
-            public bool Mute { get; set; }
-            public string Joined_At { get; set; }
-            public bool Deaf { get; set; }
-            public string Nick { get; set; }
-        }
-
-        public class PermissionOverwrite
-        {
-            public string Role { get; set; }
-            public string Id { get; set; }
-            public int Deny { get; set; }
-            public int Allow { get; set; }
-        }
-
-        public class Channel
-        {
-            public string Type { get; set; }
-            public string Topic { get; set; }
-            public int Position { get; set; }
-            public List<PermissionOverwrite> Permission_Overwrites { get; set; }
-            public string Name { get; set; }
-            public string Last_Pin_Timestamp { get; set; }
-            public string Last_Message_Id { get; set; }
-            public string Id { get; set; }
-            public bool Is_Private { get; set; }
-            public DiscordUser Recipient { get; set; }
-        }
-
-        public class Guild
-        {
-            public string Id { get; set; }
-            public string Name { get; set; }
-            public string Icon { get; set; }
-            public string Splash { get; set; }
-            public string Owner_Id { get; set; }
-            public string Region { get; set; }
-            public bool EmbebEnabled { get; set; }
-            public List<DigiDiscord.Guild.Role> Roles { get; set; }
-            public List<DigiDiscord.Guild.Emoji> Emojis { get; set; }
-            public List<string> Features { get; set; }
-            public int MultifactorAuthLevel { get; set; }
-            public DateTime Joined_At { get; set; }
-            public bool Large { get; set; }
-            public bool Unavailable { get; set; }
-            public int MemberCount { get; set; }
-            public List<Member> Members { get; set; }
-            public List<Channel> Channels { get; set; }
-            public List<DigiDiscord.Guild.Presence> Presences { get; set; }
-            public int AFK_Timeout { get; set; }
-            public string AFK_Channel_Id { get; set; }
-        }
-    }
-
-    public class GuildManager
-    {
-        private Dictionary<string,Guild> Guilds = new Dictionary<string, Guild>();
-    }
-
     public class ConsoleLogger : ILogger
     {
         private LogLevel m_minLevel;
@@ -190,11 +96,9 @@ namespace DigiDiscord
             Token = File.ReadAllText("Token.txt");
             client = new HttpClient();
 
-            client.BaseAddress = new Uri(DiscordAPI.ApiBase);
+            client.BaseAddress = new Uri(DiscordAPI.Base.API);
             client.DefaultRequestHeaders.Add("Authorization", $"Bot {Token}");
             client.DefaultRequestHeaders.Add("User-Agent", "DigiBot/0.0.0.0");
-
-            Dictionary<string, Internal.Guild> Guilds = new Dictionary<string, Internal.Guild>();
 
             try
             {
@@ -211,57 +115,7 @@ namespace DigiDiscord
                     var url = json["url"].ToString();
 
                     var gatewayMgr = new GatewayManager(url, Token, new ConsoleLogger());
-
-                    gatewayMgr.EventDispatched += (eventName, payload) =>
-                    {
-                        Log(LogLevel.Debug, $"{eventName} - {payload}");
-
-                        var eventValue = (Internal.Events)Enum.Parse(typeof(Internal.Events), eventName);
-
-                        var eventPayload = JObject.Parse(payload);
-
-                        switch(eventValue)
-                        {
-                            case Internal.Events.READY:
-                            {
-                                var guilds = eventPayload["guilds"] as JArray;
-
-                                foreach(var guild in guilds)
-                                {
-                                    var g = new Internal.Guild { Id = guild["id"].ToString(), Unavailable = guild["unavailable"].ToObject<bool>() };
-
-                                    Guilds.Add(g.Id, g);
-                                }
-
-                                break;
-                            }
-                            case Internal.Events.GUILD_CREATE:
-                            {
-                                    Internal.Guild g = null;
-                                if(Guilds.ContainsKey(eventPayload["id"].ToString()))
-                                {
-                                    g = Guilds[eventPayload["id"].ToString()];
-                                }
-                                else
-                                {
-                                    g = new Internal.Guild() { Id = eventPayload["id"].ToString() };
-                                    Guilds.Add(g.Id, g);
-                                }
-
-                                g = eventPayload.ToObject<Internal.Guild>();
-
-                                Guilds[g.Id] = g;
-
-                                break;
-                            }
-                            case Internal.Events.CHANNEL_CREATE:
-                            {
-                                    Internal.Channel c = eventPayload.ToObject<Internal.Channel>();
-
-                                break;
-                            }
-                        }
-                    };
+                    var guildMgr = new GuildManager(gatewayMgr, Logger);
 
                     gatewayMgr.Initialize();
 

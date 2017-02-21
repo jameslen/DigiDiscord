@@ -107,6 +107,20 @@ namespace DigiDiscord
             });
         }
 
+        public void RequestGuildAllMembers(string guildId, int limit)
+        {
+            var guildRequestPayload = $"{{ 'guild_id': '{guildId}', 'query':'', 'limit': {limit}}}";
+
+            SendData(string.Format(GatewayOp.GatewayPayloadBase, (int)GatewayOpCode.RequestGuildMembers, guildRequestPayload, "null", "null"));
+        }
+
+        public void RequestGuildMemberSearch(string guildId, string query, int limit)
+        {
+            var guildRequestPayload = $"{{ 'guild_id': '{guildId}', 'query':'{query}', 'limit': {limit}}}";
+
+            SendData(string.Format(GatewayOp.GatewayPayloadBase, (int)GatewayOpCode.RequestGuildMembers, guildRequestPayload, "null", "null"));
+        }
+
         protected void DispatchEvent(string eventName, string payload)
         {
             EventDispatched?.Invoke(eventName, payload);

@@ -1,10 +1,13 @@
-﻿using System;
+﻿using DigiDiscord.Utilities;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 // Source Docs: https://github.com/hammerandchisel/discord-api-docs/blob/master/docs/resources/Guild.md
+//              https://github.com/hammerandchisel/discord-api-docs/blob/master/docs/resources/Channel.md
 
 namespace DigiDiscord
 {
@@ -125,7 +128,7 @@ namespace DigiDiscord
     {
         public class Overwrite
         {
-            public string RoleId { get; set; }
+            public string Id { get; set; }
             public string Type { get; set; }
             public int Allow { get; set; }
             public int Deny { get; set; }
@@ -137,6 +140,7 @@ namespace DigiDiscord
         public string Type { get; set; }
         public int Position { get; set; }
         public bool IsPrivate { get; set; }
+        [JsonConverter(typeof(JsonListToDictionaryById<Overwrite>))]
         public Dictionary<string, Overwrite> PermissionOverwrites { get; set; }
         public string Topic { get; set; }
         public string LastMessageId { get; set; }
@@ -191,16 +195,21 @@ namespace DigiDiscord
         public int MultifactorAuthLevel { get; set; }
         public DateTime Joined_At { get; set; }
         public bool Large { get; set; }
-        public bool Unavailable { get; set; }
+        public bool? Unavailable { get; set; }
         public int MemberCount { get; set; }
         public int AFK_Timeout { get; set; }
         public string AFK_Channel_Id { get; set; }
 
+        public List<string> Features { get; set; }
+        [JsonConverter(typeof(JsonListToDictionaryByUserId<Presence>))]
+        public Dictionary<string, Presence> Presences { get; set; }
+        [JsonConverter(typeof(JsonListToDictionaryById<Role>))]
         public Dictionary<string,Role> Roles { get; set; }
+        [JsonConverter(typeof(JsonListToDictionaryById<Emoji>))]
         public Dictionary<string,Emoji> Emojis { get; set; }
-        public Dictionary<string,string> Features { get; set; }
+        [JsonConverter(typeof(JsonListToDictionaryByUserId<GuildMember>))]
         public Dictionary<string,GuildMember> Members { get; set; }
+        [JsonConverter(typeof(JsonListToDictionaryById<GuildChannel>))]
         public Dictionary<string,GuildChannel> Channels { get; set; }
-        public Dictionary<string,Presence> Presences { get; set; }
     }
 }
