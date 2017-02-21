@@ -135,17 +135,17 @@ namespace DigiDiscord
         }
 
         public string Id { get; set; }
-        public string GuildId { get; set; }
+        public string Guild_Id { get; set; }
         public string Name { get; set; }
         public string Type { get; set; }
         public int Position { get; set; }
-        public bool IsPrivate { get; set; }
+        public bool Is_Private { get; set; }
         [JsonConverter(typeof(JsonListToDictionaryById<Overwrite>))]
-        public Dictionary<string, Overwrite> PermissionOverwrites { get; set; }
+        public Dictionary<string, Overwrite> Permission_Overwrites { get; set; }
         public string Topic { get; set; }
-        public string LastMessageId { get; set; }
-        public int? BitRate { get; set; }
-        public int? UserLimit { get; set; }
+        public string Last_Message_Id { get; set; }
+        public int? Bitrate { get; set; }
+        public int? User_Limit { get; set; }
     }
 
     public class Guild
@@ -155,7 +155,7 @@ namespace DigiDiscord
             public string Id { get; set; }
             public string Name { get; set; }
             public List<string> Roles { get; set; }
-            public bool RequireColons { get; set; }
+            public bool Require_Colons { get; set; }
             public bool Managed { get; set; }
         }
 
@@ -192,11 +192,11 @@ namespace DigiDiscord
         public string Owner_Id { get; set; }
         public string Region { get; set; }
         public bool EmbedEnabled { get; set; }
-        public int MultifactorAuthLevel { get; set; }
+        public int Multifactor_Auth_Level { get; set; }
         public DateTime Joined_At { get; set; }
         public bool Large { get; set; }
         public bool? Unavailable { get; set; }
-        public int MemberCount { get; set; }
+        public int Member_Count { get; set; }
         public int AFK_Timeout { get; set; }
         public string AFK_Channel_Id { get; set; }
 

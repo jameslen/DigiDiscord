@@ -1,4 +1,5 @@
 ﻿using DigiDiscord.Utilities;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -26,6 +27,7 @@ namespace DigiDiscord
         GUILD_MEMBER_UPDATE,
         GUILD_MEMBERS_CHUNK,
         GUILD_ROLE_CREATE,
+        GUILD_ROLE_UPDATE,
         GUILD_ROLE_DELETE,
         MESSAGE_CREATE,
         MESSAGE_UPDATE,
@@ -54,10 +56,11 @@ namespace DigiDiscord
 
         public delegate void GuildUpdate(Guild g);
         public event GuildUpdate GuildCreated;
+        public event GuildUpdate GuildUpdated;
         public event GuildUpdate GuildDeleted;
 
         public delegate void GuildChannelEventHandler(Guild guild, GuildChannel channel);
-        public event GuildChannelEventHandler ChannelCreated;
+        public event GuildChannelEventHandler ChannelCreate;
         public event GuildChannelEventHandler ChannelUpdate;
         public event GuildChannelEventHandler ChannelDelete;
 
@@ -73,7 +76,7 @@ namespace DigiDiscord
         public event GuildMemberUpdate MemberRemove;
         public event GuildMemberUpdate MemberUpdate;
 
-        public delegate void GuildMemberUpdateChunk(Guild guild, List<GuildMember> member);
+        public delegate void GuildMemberUpdateChunk(Guild guild, List<GuildMember> members);
         public event GuildMemberUpdateChunk MemberChunkUpdate;
 
         public delegate void GuildRoleUpdate(Guild guild, Guild.Role role);
@@ -97,7 +100,7 @@ namespace DigiDiscord
 
         private void GatewayMessageHandler(string eventName, string payload)
         {
-            _Logger?.Log(LogLevel.Debug, $"{eventName} - {payload}");
+            _Logger?.Debug($"{eventName} - {payload}");
 
             var eventValue = (Events)Enum.Parse(typeof(Events), eventName);
 
@@ -123,7 +126,7 @@ namespace DigiDiscord
                         Guild g = null;
                         if (Guilds.ContainsKey(eventPayload["id"].ToString()))
                         {
-                            //g = Guilds[eventPayload["id"].ToString()];
+                            g = Guilds[eventPayload["id"].ToString()];
                         }
                         else
                         {
@@ -131,16 +134,178 @@ namespace DigiDiscord
                             Guilds.Add(g.Id, g);
                         }
 
-                        g = eventPayload.ToObject<Guild>();
+                        JsonConvert.PopulateObject(payload, g);
 
                         Guilds[g.Id] = g;
 
+                        GuildCreated?.Invoke(g);
+                        break;
+                    }
+                case Events.GUILD_UPDATE:
+                    {
+                        var g = Guilds[eventPayload["id"].ToString()];
+
+                        // TODO: Double check that this is the correct behavior.
+                        JsonConvert.PopulateObject(payload, g);
+
+                        GuildUpdated?.Invoke(g);
+                        break;
+                    }
+                case Events.GUILD_DELETE:
+                    {
+                        var g = Guilds[eventPayload["id"].ToString()];
+                        Guilds.Remove(eventPayload["id"].ToString());
+
+                        GuildDeleted?.Invoke(g);
                         break;
                     }
                 case Events.CHANNEL_CREATE:
                     {
                         var c = eventPayload.ToObject<GuildChannel>();
+                        var g = Guilds[c.Guild_Id];
 
+                        g.Channels.Add(c.Id, c);
+
+                        ChannelCreate?.Invoke(g, c);
+                        break;
+                    }
+                case Events.CHANNEL_UPDATE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var c = g.Channels[eventPayload["id"].ToString()];
+
+                        JsonConvert.PopulateObject(payload, c);
+
+                        ChannelUpdate?.Invoke(g, c);
+                        break;
+                    }
+                case Events.CHANNEL_DELETE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var c = g.Channels[eventPayload["id"].ToString()];
+
+                        g.Channels.Remove(c.Id);
+
+                        ChannelDelete?.Invoke(g, c);
+                        break;
+                    }
+                case Events.GUILD_BAN_ADD:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var m = g.Members[eventPayload["id"].ToString()];
+
+                        g.Members.Remove(m.User.Id);
+
+                        BanAdd?.Invoke(g, m.User);
+                        break;
+                    }
+                case Events.GUILD_BAN_REMOVE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+
+                        BanRemove?.Invoke(g, eventPayload.ToObject<DiscordUser>());
+                        break;
+                    }
+                case Events.GUILD_EMOJIS_UPDATE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+
+                        g.Emojis.Clear();
+
+                        JsonConvert.PopulateObject(payload, g);
+
+                        EmojiUpdate?.Invoke(g, eventPayload["emojis"].ToObject<List<Guild.Emoji>>());
+                        break;
+                    }
+                case Events.GUILD_MEMBER_ADD:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var m = eventPayload.ToObject<GuildMember>();
+
+                        g.Members.Add(m.User.Id, m);
+                        g.Member_Count++;
+
+                        MemberAdd?.Invoke(g, m);
+                        break;
+                    }
+                case Events.GUILD_MEMBER_REMOVE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var m = g.Members[eventPayload["user"]["id"].ToString()];
+
+                        g.Members.Remove(m.User.Id);
+
+                        MemberRemove?.Invoke(g, m);
+                        break;
+                    }
+                case Events.GUILD_MEMBER_UPDATE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var m = g.Members[eventPayload["user"]["id"].ToString()];
+
+                        JsonConvert.PopulateObject(payload, m);
+
+                        MemberUpdate?.Invoke(g, m);
+                        break;
+                    }
+                case Events.GUILD_MEMBERS_CHUNK:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var members = eventPayload["members"].ToObject<List<GuildMember>>();
+
+                        foreach(var member in members)
+                        {
+                            g.Members.Remove(member.User.Id);
+                            g.Members.Add(member.User.Id, member);
+                        }
+                        
+                        MemberChunkUpdate?.Invoke(g, members);
+                        break;
+                    }
+                case Events.GUILD_ROLE_CREATE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var r = eventPayload["role"].ToObject<Guild.Role>();
+
+                        g.Roles.Add(r.Id, r);
+
+                        RoleCreate?.Invoke(g, r);
+                        break;
+                    }
+                case Events.GUILD_ROLE_UPDATE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var r = g.Roles[eventPayload["role"]["id"].ToString()];
+
+                        JsonConvert.PopulateObject(eventPayload["role"].ToString(), r);
+
+                        RoleUpdate?.Invoke(g, r);
+                        break;
+                    }
+                case Events.GUILD_ROLE_DELETE:
+                    {
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+                        var r = g.Roles[eventPayload["role_id"].ToString()];
+
+                        g.Roles.Remove(r.Id);
+
+                        RoleDelete?.Invoke(g, r);
+                        break;
+                    }
+                case Events.MESSAGE_CREATE:
+                    {
+                        break;
+                    }
+                case Events.MESSAGE_UPDATE:
+                    {
+                        break;
+                    }
+                case Events.MESSAGE_DELETE:
+                    {
+                        break;
+                    }
+                case Events.MESSAGE_DELETE_BULK:
+                    {
                         break;
                     }
             }

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace DigiDiscord.Utilities
 {
-    public class JsonListToDictionaryById<T> : JsonConverter where T: class
+    public class JsonListToDictionaryById<T> : JsonConverter where T : class
     {
         public override bool CanConvert(Type objectType)
         {
