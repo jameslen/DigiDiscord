@@ -146,6 +146,8 @@ namespace DigiDiscord
         public string Last_Message_Id { get; set; }
         public int? Bitrate { get; set; }
         public int? User_Limit { get; set; }
+
+        // TODO: Add events to channels
     }
 
     public class Guild
@@ -211,5 +213,7 @@ namespace DigiDiscord
         public Dictionary<string,GuildMember> Members { get; set; }
         [JsonConverter(typeof(JsonListToDictionaryById<GuildChannel>))]
         public Dictionary<string,GuildChannel> Channels { get; set; }
+
+        // TODO: Add events to Guilds
     }
 }

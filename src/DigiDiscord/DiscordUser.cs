@@ -29,7 +29,7 @@ namespace DigiDiscord
         }
     }
 
-        public class DiscordUser
+    public class DiscordUser
     {
         public string Username { get; set; }
         public string Id { get; set; }
@@ -39,5 +39,9 @@ namespace DigiDiscord
         public bool MFAEnabled { get; set; }
         public bool Verified { get; set; }
         public string Email { get; set; }
+
+        public List<Guild> Guilds { get; set; }
+
+        // TODO: Add events to users
     }
 }

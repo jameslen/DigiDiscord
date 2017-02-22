@@ -43,6 +43,8 @@ namespace DigiDiscord
     public class GuildManager
     {
         private Dictionary<string, Guild> Guilds = new Dictionary<string, Guild>();
+        private Dictionary<string, GuildChannel> Channels = new Dictionary<string, GuildChannel>();
+        private Dictionary<string, DiscordUser> Users = new Dictionary<string, DiscordUser>();
         private GatewayManager _Gateway;
         private ILogger _Logger;
 
@@ -136,7 +138,25 @@ namespace DigiDiscord
 
                         JsonConvert.PopulateObject(payload, g);
 
-                        Guilds[g.Id] = g;
+                        foreach(var channel in g.Channels)
+                        {
+                            if(!Channels.ContainsKey(channel.Key))
+                            {
+                                Channels.Add(channel.Key, channel.Value);
+                            }
+                        }
+
+                        foreach(var member in g.Members)
+                        {
+                            if(!Users.ContainsKey(member.Key))
+                            {
+                                Users.Add(member.Key, member.Value.User);
+                            }
+                            else if(member.Value.User != Users[member.Key])
+                            {
+                                member.Value.User = Users[member.Key];
+                            }
+                        }
 
                         GuildCreated?.Invoke(g);
                         break;
@@ -165,6 +185,7 @@ namespace DigiDiscord
                         var g = Guilds[c.Guild_Id];
 
                         g.Channels.Add(c.Id, c);
+                        Channels.Add(c.Id, c);
 
                         ChannelCreate?.Invoke(g, c);
                         break;
@@ -185,6 +206,7 @@ namespace DigiDiscord
                         var c = g.Channels[eventPayload["id"].ToString()];
 
                         g.Channels.Remove(c.Id);
+                        Channels.Remove(c.Id);
 
                         ChannelDelete?.Invoke(g, c);
                         break;
@@ -194,6 +216,7 @@ namespace DigiDiscord
                         var g = Guilds[eventPayload["guild_id"].ToString()];
                         var m = g.Members[eventPayload["id"].ToString()];
 
+                        Users[m.User.Id].Guilds.Remove(g);
                         g.Members.Remove(m.User.Id);
 
                         BanAdd?.Invoke(g, m.User);
@@ -222,8 +245,18 @@ namespace DigiDiscord
                         var g = Guilds[eventPayload["guild_id"].ToString()];
                         var m = eventPayload.ToObject<GuildMember>();
 
+                        if (!Users.ContainsKey(m.User.Id))
+                        {
+                            Users.Add(m.User.Id, m.User);
+                        }
+                        else
+                        {
+                            m.User = Users[m.User.Id];
+                        }
+
                         g.Members.Add(m.User.Id, m);
-                        g.Member_Count++;
+                        m.User.Guilds.Add(g);
+                        
 
                         MemberAdd?.Invoke(g, m);
                         break;
@@ -234,6 +267,7 @@ namespace DigiDiscord
                         var m = g.Members[eventPayload["user"]["id"].ToString()];
 
                         g.Members.Remove(m.User.Id);
+                        m.User.Guilds.Remove(g);
 
                         MemberRemove?.Invoke(g, m);
                         break;
@@ -255,6 +289,15 @@ namespace DigiDiscord
 
                         foreach(var member in members)
                         {
+                            if(Users.ContainsKey(member.User.Id))
+                            {
+                                member.User = Users[member.User.Id];
+                            }
+                            else
+                            {
+                                Users.Add(member.User.Id, member.User);
+                            }
+
                             g.Members.Remove(member.User.Id);
                             g.Members.Add(member.User.Id, member);
                         }
