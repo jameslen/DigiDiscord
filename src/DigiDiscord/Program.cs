@@ -84,56 +84,27 @@ namespace DigiDiscord
 
         public static void Main(string[] args)
         {
-            AsyncMain(args).Wait();
-            Console.ReadLine();
-        }
-
-        public static HttpClient client;
-        public static ILogger Logger = new ConsoleLogger(LogLevel.Debug);
-
-        public static async Task AsyncMain(string[] args)
-        {
             Token = File.ReadAllText("Token.txt");
-            client = new HttpClient();
-
-            client.BaseAddress = new Uri(DiscordAPI.Base.API);
-            client.DefaultRequestHeaders.Add("Authorization", $"Bot {Token}");
-            client.DefaultRequestHeaders.Add("User-Agent", "DigiBot/0.0.0.0");
 
             try
             {
-                Log(LogLevel.Verbose, "Retrieving gateway...");
-                var gateway = await client.GetAsync(DiscordAPI.Gateway.Bot);
+                var discord = new Discord(Token);
 
-                if (gateway.IsSuccessStatusCode)
+                discord.Initialize(Logger).Wait();
+
+                for (;;)
                 {
-                    var result = await gateway.Content.ReadAsStringAsync();
-                    Log(LogLevel.Verbose, $"Gateway returned: {result}");
-
-                    var json = JObject.Parse(result);
-
-                    var url = json["url"].ToString();
-
-                    var gatewayMgr = new GatewayManager(url, Token, new ConsoleLogger());
-                    var guildMgr = new GuildManager(gatewayMgr, Logger);
-
-                    gatewayMgr.Initialize();
-
-                    while (true)
-                    {
-                        
-                    }
-                }
-                else
-                {
-                    Log(LogLevel.Error, $"Error returning gateway: {gateway.ReasonPhrase}");
                 }
             }
             catch (Exception e)
             {
                 Log(LogLevel.Error, $"{e.Message}");
             }
+
+            Console.ReadLine();
         }
+
+        public static ILogger Logger = new ConsoleLogger(LogLevel.Debug);
 
         public static void Log(LogLevel level, string message)
         {

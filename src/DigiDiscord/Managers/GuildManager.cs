@@ -91,7 +91,7 @@ namespace DigiDiscord
         public event GuildChannelMessageUpdate MessageUpdate;
         public event GuildChannelMessageUpdate MessageDelete;
 
-        public delegate void GuildChannelMessageDeleteBulk(List<Message> messages);
+        public delegate void GuildChannelMessageDeleteBulk(GuildChannel channel, List<Message> messages);
         public event GuildChannelMessageDeleteBulk MessagesBulkDelete;
 
         //TODO: Presence
@@ -337,18 +337,42 @@ namespace DigiDiscord
                     }
                 case Events.MESSAGE_CREATE:
                     {
+                        var message = eventPayload.ToObject<Message>();
+                        var c = Channels[message.Channel_Id];
+
+                        if(string.IsNullOrEmpty(message.Webhook_Id))
+                        {
+                            if(Users.ContainsKey(message.Author.Id))
+                            {
+                                message.Author = Users[message.Author.Id];
+                            }
+                        }
+
+                        MessageCreate?.Invoke(c, message);
                         break;
                     }
                 case Events.MESSAGE_UPDATE:
                     {
+                        var message = eventPayload.ToObject<Message>();
+                        var c = Channels[message.Channel_Id];
+
+                        MessageUpdate?.Invoke(c, message);
                         break;
                     }
                 case Events.MESSAGE_DELETE:
                     {
+                        var message = eventPayload.ToObject<Message>();
+                        var c = Channels[message.Channel_Id];
+
+                        MessageDelete?.Invoke(c, message);
                         break;
                     }
                 case Events.MESSAGE_DELETE_BULK:
                     {
+                        var messages = eventPayload.ToObject<List<Message>>();
+                        var c = Channels[eventPayload["channel_id"].ToString()];
+
+                        MessagesBulkDelete?.Invoke(c, messages);
                         break;
                     }
             }

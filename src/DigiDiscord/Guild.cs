@@ -215,5 +215,6 @@ namespace DigiDiscord
         public Dictionary<string,GuildChannel> Channels { get; set; }
 
         // TODO: Add events to Guilds
+        // User member join/leave/update/chunk, guild update, channel create/update/delete, ban add/delete, emoji, role c/u/d
     }
 }

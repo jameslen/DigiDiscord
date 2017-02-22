@@ -36,12 +36,12 @@ namespace DigiDiscord
         public string Discriminator { get; set; }
         public string Avatar { get; set; }
         public bool Bot { get; set; }
-        public bool MFAEnabled { get; set; }
+        public bool MFA_Enabled { get; set; }
         public bool Verified { get; set; }
         public string Email { get; set; }
 
         public List<Guild> Guilds { get; set; }
 
-        // TODO: Add events to users
+        // TODO: Add events to users: join/leave/presence change/message sent
     }
 }
