@@ -284,9 +284,10 @@ namespace DigiDiscord
 
         private void SendHeartbreat()
         {
-            Task.Run(() =>
+            
+            Task.Run(async () =>
             {
-                Thread.Sleep(m_heartbeatInterval);
+                await Task.Delay(m_heartbeatInterval);
                 SendData(CreateHeartbeat(m_lastRecievedSeq));
             });
         }

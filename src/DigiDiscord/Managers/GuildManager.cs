@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -56,6 +57,11 @@ namespace DigiDiscord
             _Gateway.EventDispatched += GatewayMessageHandler;
         }
 
+        public Guild GetGuild(string id)
+        {
+            return Guilds[id];
+        }
+
         public delegate void GuildUpdate(Guild g);
         public event GuildUpdate GuildCreated;
         public event GuildUpdate GuildUpdated;
@@ -94,7 +100,9 @@ namespace DigiDiscord
         public delegate void GuildChannelMessageDeleteBulk(GuildChannel channel, List<Message> messages);
         public event GuildChannelMessageDeleteBulk MessagesBulkDelete;
 
-        //TODO: Presence
+        public delegate void MemberPresenceUpdate(Guild guild, Guild.Presence presence);
+        public event MemberPresenceUpdate PresenceUpdate;
+
         //TODO: Typing Start
         //TODO: Integrations
         //TODO: User Updates
@@ -144,6 +152,9 @@ namespace DigiDiscord
                             {
                                 Channels.Add(channel.Key, channel.Value);
                             }
+
+                            channel.Value.Guild_Id = g.Id;
+                            channel.Value.Guild = g;
                         }
 
                         foreach(var member in g.Members)
@@ -157,6 +168,13 @@ namespace DigiDiscord
                                 member.Value.User = Users[member.Key];
                             }
                         }
+
+                        foreach(var presence in g.Presences.Values)
+                        {
+                            presence.User = Users[presence.User.Id];
+                        }
+
+                        g.UpdateAllUserPermissions();
 
                         GuildCreated?.Invoke(g);
                         break;
@@ -184,6 +202,7 @@ namespace DigiDiscord
                         var c = eventPayload.ToObject<GuildChannel>();
                         var g = Guilds[c.Guild_Id];
 
+                        c.Guild = g;
                         g.Channels.Add(c.Id, c);
                         Channels.Add(c.Id, c);
 
@@ -213,6 +232,7 @@ namespace DigiDiscord
                     }
                 case Events.GUILD_BAN_ADD:
                     {
+                        // TODO: User knows about bans
                         var g = Guilds[eventPayload["guild_id"].ToString()];
                         var m = g.Members[eventPayload["id"].ToString()];
 
@@ -256,7 +276,8 @@ namespace DigiDiscord
 
                         g.Members.Add(m.User.Id, m);
                         m.User.Guilds.Add(g);
-                        
+
+                        g.UpdateUserPermission(m);
 
                         MemberAdd?.Invoke(g, m);
                         break;
@@ -278,6 +299,8 @@ namespace DigiDiscord
                         var m = g.Members[eventPayload["user"]["id"].ToString()];
 
                         JsonConvert.PopulateObject(payload, m);
+
+                        g.UpdateUserPermission(m);
 
                         MemberUpdate?.Invoke(g, m);
                         break;
@@ -373,6 +396,29 @@ namespace DigiDiscord
                         var c = Channels[eventPayload["channel_id"].ToString()];
 
                         MessagesBulkDelete?.Invoke(c, messages);
+                        break;
+                    }
+                case Events.PRESENCE_UPDATE:
+                    {
+                        var presense = eventPayload.ToObject<Guild.Presence>();
+                        var g = Guilds[eventPayload["guild_id"].ToString()];
+
+                        if(g.Presences.ContainsKey(presense.User.Id))
+                        {
+                            var p = g.Presences[presense.User.Id];
+
+                            p.Game = presense.Game;
+                            p.Status = presense.Status;
+
+                            presense = p;
+                        }
+                        else
+                        {
+                            presense.User = Users[presense.User.Id];
+                            g.Presences.Add(presense.User.Id, presense);
+                        }
+
+                        PresenceUpdate?.Invoke(g, presense);
                         break;
                     }
             }

@@ -112,6 +112,64 @@ namespace DigiDiscord
                 // TODO: Finish
             }
         }
+
+        public static class GuildChannel
+        {
+            public static readonly string Get = "api/channels/{0}";
+
+            // PUT, PATCH
+            public static readonly string Update = "api/channels/{0}";
+
+            public static readonly string Delete = "api/channels/{0}";
+
+            // GET, query string params: 
+            // around, before, after, limit
+            public static readonly string GetMessages = "api/channels/{0}/messages";
+
+            // GET
+            public static readonly string GetMessage = "api/channels/{0}/messages/{1}";
+
+            // POST, json body:
+            // {
+            //     content: string,
+            //     nonce: string,
+            //     tts: bool,
+            //     file: file content,
+            //     embed: embed object
+            // }
+            public static readonly string CreateMessage = "api/channels/{0}/messages";
+        }
+    }
+
+    public enum Permissions
+    {
+        CREATE_INSTANT_INVITE   = 0x00000001,
+        KICK_MEMBERS            = 0x00000002,
+        BAN_MEMBERS             = 0x00000004,
+        ADMINISTRATOR           = 0x00000008,
+        MANAGE_CHANNELS         = 0x00000010,
+        MANAGE_GUILD            = 0x00000020,
+        ADD_REACTIONS           = 0x00000040,
+        READ_MESSAGES           = 0x00000400,
+        SEND_MESSAGES           = 0x00000800,
+        SEND_TTS_MESSAGES       = 0x00001000,
+        MANAGE_MESSAGES         = 0x00002000,
+        EMBED_LINKS             = 0x00004000,
+        ATTACH_FILES            = 0x00008000,
+        READ_MESSAGE_HISTORY    = 0x00010000,
+        MENTION_EVERYONE        = 0x00020000,
+        USE_EXTERNAL_EMOJIS     = 0x00040000,
+        CONNECT                 = 0x00100000,
+        SPEAK                   = 0x00200000,
+        MUTE_MEMBERS            = 0x00400000,
+        DEAFEN_MEMBERS          = 0x00800000,
+        MOVE_MEMBERS            = 0x01000000,
+        USE_VAD                 = 0x02000000,
+        CHANGE_NICKNAME         = 0x04000000,
+        MANAGE_NICKNAMES        = 0x08000000,
+        MANAGE_ROLES            = 0x10000000,
+        MANAGE_WEBHOOKS         = 0x20000000,
+        MANAGE_EMOJIS           = 0x40000000
     }
 
     public class GuildMember
@@ -122,6 +180,7 @@ namespace DigiDiscord
         public DateTime JoinedAt { get; set; }
         public bool Deaf { get; set; }
         public string Nick { get; set; }
+        public int Permissions { get; set; }
     }
 
     public class GuildChannel
@@ -136,6 +195,7 @@ namespace DigiDiscord
 
         public string Id { get; set; }
         public string Guild_Id { get; set; }
+        public Guild Guild { get; set; }
         public string Name { get; set; }
         public string Type { get; set; }
         public int Position { get; set; }
@@ -148,6 +208,13 @@ namespace DigiDiscord
         public int? User_Limit { get; set; }
 
         // TODO: Add events to channels
+
+        public async Task SendMessage(string message, bool tts = false)
+        {
+            var messagePayload = $"{{\"content\": \"{message}\", \"tts\": {tts.ToString().ToLower()}}}";
+
+            await Discord.Instance.Post<Message>(string.Format(DiscordAPI.GuildChannel.CreateMessage, Id), messagePayload);
+        }
     }
 
     public class Guild
@@ -216,5 +283,22 @@ namespace DigiDiscord
 
         // TODO: Add events to Guilds
         // User member join/leave/update/chunk, guild update, channel create/update/delete, ban add/delete, emoji, role c/u/d
+
+        public void UpdateAllUserPermissions()
+        {
+            foreach(var member in Members.Values)
+            {
+                UpdateUserPermission(member);
+            }
+        }
+
+        public void UpdateUserPermission(GuildMember member)
+        {
+            member.Permissions = 0;
+            foreach(var role in member.Roles)
+            {
+                member.Permissions |= Roles[role].Permissions;
+            }
+        }
     }
 }
