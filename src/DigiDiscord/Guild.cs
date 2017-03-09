@@ -181,6 +181,7 @@ namespace DigiDiscord
         public bool Deaf { get; set; }
         public string Nick { get; set; }
         public int Permissions { get; set; }
+        public Guild Guild { get; set; }
     }
 
     public class GuildChannel

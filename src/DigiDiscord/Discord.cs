@@ -43,7 +43,7 @@ namespace DigiDiscord
         internal HttpClient m_httpClient = new HttpClient();
         private ILogger _Logger;
 
-        private Discord()
+        public Discord()
         {
             m_httpClient.BaseAddress = new Uri(DiscordAPI.Base.API);
             m_httpClient.DefaultRequestHeaders.Add("User-Agent", $"DigiBot/{typeof(Discord).GetTypeInfo().Assembly.ImageRuntimeVersion}");

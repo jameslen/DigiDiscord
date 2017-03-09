@@ -33,6 +33,7 @@ namespace DigiDiscord
 
         public string Id { get; set; }
         public string Channel_Id { get; set; }
+        public GuildChannel Channel { get; set; }
         public DiscordUser Author { get; set; }
         public string Content { get; set; }
         public DateTime Timestamp { get; set; }

@@ -167,6 +167,8 @@ namespace DigiDiscord
                             {
                                 member.Value.User = Users[member.Key];
                             }
+
+                            member.Value.Guild = g;
                         }
 
                         foreach(var presence in g.Presences.Values)
@@ -277,6 +279,7 @@ namespace DigiDiscord
                         g.Members.Add(m.User.Id, m);
                         m.User.Guilds.Add(g);
 
+                        m.Guild = g;
                         g.UpdateUserPermission(m);
 
                         MemberAdd?.Invoke(g, m);
@@ -362,6 +365,8 @@ namespace DigiDiscord
                     {
                         var message = eventPayload.ToObject<Message>();
                         var c = Channels[message.Channel_Id];
+
+                        message.Channel = c;
 
                         if(string.IsNullOrEmpty(message.Webhook_Id))
                         {

@@ -1,13 +1,16 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26228.4
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{B5B04EBD-EBE2-40BC-98F6-ED8A80C85E27}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{3A48D450-3559-4DCD-9190-68FE295F8C5D}"
+	ProjectSection(SolutionItems) = preProject
+		global.json = global.json
+	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DigiDiscord", "src\DigiDiscord\DigiDiscord.csproj", "{F996D071-AAB2-4847-BB29-E35E3FD4EC5D}"
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "DigiDiscord", "src\DigiDiscord\DigiDiscord.xproj", "{F996D071-AAB2-4847-BB29-E35E3FD4EC5D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
